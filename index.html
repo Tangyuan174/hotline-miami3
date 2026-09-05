@@ -81,65 +81,69 @@
     </style>
 </head>
 <body>
+
 <script>
-  const OriginalXHR = window.XMLHttpRequest;
+  // Safe XHR Interception preserving the prototype chain
+  (function() {
+    const originalOpen = XMLHttpRequest.prototype.open;
+    const originalSend = XMLHttpRequest.prototype.send;
 
-  function InterceptedXHR() {
-    const xhr = new OriginalXHR();
+    const blockedExtensions = [
+      "steamon", "steamoff", "achievements.dat", "mask.tmp", 
+      "surfaces", "skip", "restartmusic", "xbox", 
+      "volume.dat", "keyboard.dat", "blood", "alienware"
+    ];
 
-    let blocked = false;
-
-    const originalOpen = xhr.open;
-    xhr.open = function(method, url, async, user, password) {
-      blocked = (url.endsWith("steamon") || url.endsWith("achievements.dat") || url.endsWith("mask.tmp") || url.endsWith("surfaces") || url.endsWith("steamoff") || url.endsWith("skip") || url.endsWith("restartmusic") || url.endsWith("xbox") || url.endsWith("volume.dat") || url.endsWith("keyboard.dat") || url.endsWith("volume.dat") || url.endsWith("blood") || url.endsWith("volume.dat") || url.endsWith("alienware"));
-      return originalOpen.apply(this, arguments);
+    XMLHttpRequest.prototype.open = function(method, url, ...args) {
+      // Keep track of whether this specific request should be blocked
+      this._blocked = blockedExtensions.some(ext => url.endsWith(ext));
+      return originalOpen.apply(this, [method, url, ...args]);
     };
 
-    const originalSend = xhr.send;
-    xhr.send = function(body) {
-      if (blocked) {
-        // simulate async 404 response
-        setTimeout(() => {
-          this.readyState = 4;
-          this.status = 404;
-          this.statusText = "Not Found";
-          this.response = "Not Found";
-          this.responseText = "Not Found";
+    XMLHttpRequest.prototype.send = function(body) {
+      if (this._blocked) {
+        // Safely simulate a 404 response without breaking event loops
+        Object.defineProperty(this, 'readyState', { writable: true, value: 4 });
+        Object.defineProperty(this, 'status', { writable: true, value: 404 });
+        Object.defineProperty(this, 'statusText', { writable: true, value: "Not Found" });
+        Object.defineProperty(this, 'response', { writable: true, value: "Not Found" });
+        Object.defineProperty(this, 'responseText', { writable: true, value: "Not Found" });
 
-          if (typeof this.onreadystatechange === "function") {
-            this.onreadystatechange();
-          }
-          if (typeof this.onload === "function") {
-            this.onload();
-          }
-        }, 0);
+        setTimeout(() => {
+          if (typeof this.onreadystatechange === "function") this.onreadystatechange();
+          if (typeof this.onload === "function") this.onload();
+          this.dispatchEvent(new Event('readystatechange'));
+          this.dispatchEvent(new Event('load'));
+        }, 1);
         return;
       }
       return originalSend.apply(this, arguments);
     };
-
-    return xhr;
-  }
-
-  window.XMLHttpRequest = function () {
-    return new InterceptedXHR();
-  };
+  })();
 </script>
-
-
 
     <div class="gm4html5_div_class" id="gm4html5_div_id">
         <canvas id="canvas" width="1920" height="1080">
             <p>Your browser doesn't support HTML5 canvas.</p>
         </canvas>
     </div>
-    <div id="loading-text"> </div>
-    <script type="text/javascript" src="html5game/HotlineMiami.js?PPPYB=938827661"></script>
+    <div id="loading-text">LOADING...</div>
+    
+    <!-- Fixed file source path to match your root level html5game.htm file -->
+    <script type="text/javascript" src="html5game.htm"></script>
+    
     <script>
         window.onload = () => {
             const loader = document.getElementById("loading-text");
             loader.style.display = "block";
-            GameMaker_Init();
+            
+            // Check if GameMaker setup exists before initializing
+            if (typeof GameMaker_Init === "function") {
+                GameMaker_Init();
+            } else {
+                console.error("GameMaker_Init not found. Make sure html5game.htm contains the game engine source code.");
+            }
+            
             setTimeout(() => loader.style.display = "none", 4000);
         };
     </script>
